@@ -1,5 +1,5 @@
 from fastapi.security import OAuth2PasswordBearer
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
@@ -7,6 +7,21 @@ from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User
+
+login_attempts = {}
+def check_rate_limit(username):
+    current_time = datetime.now()
+    if username not in login_attempts:
+        login_attempts[username] = []
+        return False
+    
+    login_attempts[username] = [
+        t for t in login_attempts[username] if current_time - t < 900
+    ]
+    return len(login_attempts[username]) >= 5
+
+SERET_KEY = "..."
+ALGORITHM = "HS256"
 
 pwd_context = CryptContext(
     schemes= ["bcrypt"],
