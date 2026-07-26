@@ -8,19 +8,24 @@ from app.schemas import DepositRequest, WithdrawRequest, TransferRequest, Transa
 from app.auth import get_current_user
 from services.banking_service import get_balance_service, deposit_service, withdraw_service, transfer_service 
 
+# Create router object
 router = APIRouter()
 
+# Deposit Endpoint
+# Allows the logged-in user to deposit money.
 @router.post("/deposit")
 def deposit(
     deposit: DepositRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):  
+    # Call deposit service
     return deposit_service(db, 
         current_user,
         deposit
     )
 
+# Withdraw Endpoint
 @router.post("/withdraw")
 def withdraw(
     withdraw: WithdrawRequest,
@@ -33,6 +38,7 @@ def withdraw(
         withdraw
     )
 
+# Transfer Endpoint
 @router.post("/transfer")
 def transfer(
     transfer: TransferRequest,
@@ -45,12 +51,15 @@ def transfer(
         transfer = transfer
     )
 
+# Balance Endpoint
+# Returns the current user's account balance.
 @router.get("/balance")
 def get_balance(
     current_user: User = Depends(get_current_user)
 ):
     return get_balance_service(current_user)
 
+# Transaction History Endpoint
 @router.get("/transactions", response_model= list[TransactionResponse])
 def get_transactions(
     skip: int = 0,
