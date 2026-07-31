@@ -1,4 +1,4 @@
-from app.models import User,Transaction
+from app.models import User,Transaction, Card
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from app.schemas import DepositRequest, WithdrawRequest, TransferRequest
@@ -21,6 +21,11 @@ def deposit_service(
 ):
         # Store current user for readability
         user = current_user
+        # Check whether the card already exists
+        card = db.query(Card).filter(
+            Card.user_id == user.id,
+            Card.card_number == deposit.card_number
+        ).first()
 
         # Validate card holder name
         if deposit.card_holder_name.strip() == "":
@@ -77,14 +82,27 @@ def deposit_service(
                 status_code=404,
                 detail="User not Found"
             )
+        if not card:
+            card = Card(
+                user_id=user.id,
+                card_holder_name=deposit.card_holder_name,
+                card_number=deposit.card_number,
+                cvv=deposit.cvv,
+                expiry_date=deposit.expiry_date
+            )
+
+            db.add(card)
+            db.commit()
+            db.refresh(card)
         # Add deposit amount to balance
         user.balance += deposit.amount
     
         # Record deposit transaction
         transaction = Transaction(
             user_id = user.id,
-            type="Deposit",
-            amount = deposit.amount
+            card_id=card.id,    
+            transaction_type="Deposit",
+            amount=deposit.amount
         )
         # Save transaction and balance
         db.add(transaction)
@@ -104,6 +122,10 @@ def withdraw_service(
         withdraw: WithdrawRequest
 ):
         user = current_user
+        card = db.query(Card).filter(
+            Card.user_id == user.id,
+            Card.card_number == withdraw.card_number
+        ).first()
     
         # Check user exists
         if not user:
@@ -117,7 +139,20 @@ def withdraw_service(
                 status_code=400,
                 detail="Amount must be greater than zero"
             )
-     
+        if not card:
+            raise HTTPException(
+                status_code=404,
+                detail="Card not found"
+            )
+        if (
+            card.card_holder_name != withdraw.card_holder_name
+            or card.cvv != withdraw.cvv
+            or card.expiry_date != withdraw.expiry_date
+        ):
+           raise HTTPException(
+               status_code=400,
+               detail="Invalid card details"
+            )
         # Ensure sufficient balance
         if withdraw.amount > user.balance:
             raise HTTPException(
@@ -126,11 +161,12 @@ def withdraw_service(
             )
         # Deduct amount
         user.balance -= withdraw.amount
-    
+
         # Record withdrawal transaction
         transaction = Transaction(
             user_id=user.id,
-            type="Withdraw",
+            card_id=card.id,
+            transaction_type="Withdraw",
             amount=withdraw.amount
         )
         # Save changes
@@ -191,7 +227,7 @@ def transfer_service(
             # Record sender transaction
             sender_transaction = Transaction(
                 user_id=sender.id,
-                type="TRANSFER_OUT",
+                transaction_type="TRANSFER_OUT",
                 amount=transfer.amount,
                 counterparty_username=receiver.username
             )
@@ -199,7 +235,7 @@ def transfer_service(
             # Record receiver transaction
             receiver_transaction = Transaction(
                 user_id=receiver.id,
-                type="TRANSFER_IN",
+                transaction_type="TRANSFER_IN",
                 amount=transfer.amount,
                 counterparty_username=sender.username
             )
@@ -207,6 +243,8 @@ def transfer_service(
             db.add(sender_transaction)
             db.add(receiver_transaction)
             db.commit()
+            db.refresh(sender)
+            db.refresh(receiver)
      
         except Exception as e:
             # Undo changes if any error occurs

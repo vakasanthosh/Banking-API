@@ -45,6 +45,10 @@ class DepositRequest(BaseModel):
 
 # Withdraw Request Schema
 class WithdrawRequest(BaseModel):
+    card_holder_name: str
+    card_number: str
+    cvv: str
+    expiry_date: str
     amount: float
 
 # Transfer Request Schema
@@ -59,7 +63,7 @@ class LoginRequest(BaseModel):
 
 # Transaction Response Schema
 class TransactionResponse(BaseModel):
-    type: str
+    transaction_type: str
     amount: float
     counterparty_username: str | None
     created_at: datetime
